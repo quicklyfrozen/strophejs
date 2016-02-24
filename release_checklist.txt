@@ -1,14 +1,15 @@
 # -*- mode: org -*-
 
 * Release Checklist
-*** Make sure all tests pass
+*** Make sure all tests pass (run 'make check')
 *** Decide on version number
 *** Update CHANGELOG.txt
-*** Tag code with version (git tag -s release-VERSION head)
+*** Check for correct version number in package.json and bower,json
+*** Run "make release"
+*** Commit the newly generated files (mention it's a new release)
+*** Tag code with version (git tag -s vVERSION )
 *** Push repo and tags (git push && git push --tags)
-*** Create version.txt with version
-*** Run make release
-*** Upload zip file and tarball to GitHub
+*** Publish on NPM: "npm publish"
 *** Add documentation to strophe.im repo
 *** Update website
 *** Tell the world

@@ -1,95 +1,70 @@
-SHELL=/bin/bash
-
+SHELL		?= /usr/env/bin/bash
+BOWER		?= node_modules/.bin/bower
+GRUNT		?= ./node_modules/.bin/grunt
+HTTPSERVE	?= ./node_modules/.bin/http-server
+PHANTOMJS	?= ./node_modules/.bin/phantomjs
 SRC_DIR = src
 DOC_DIR = doc
-PLUGIN_DIR = plugins
+DOC_TEMP = doc-temp
 NDPROJ_DIR = ndproj
 
-BASE_FILES = $(SRC_DIR)/base64.js \
-	$(SRC_DIR)/sha1.js \
-	$(SRC_DIR)/md5.js \
-	$(SRC_DIR)/core.js
-
-STROPHE = strophe.js
+STROPHE 	= strophe.js
 STROPHE_MIN = strophe.min.js
 
-PLUGIN_FILES = $(shell ls $(PLUGIN_DIR)/strophe.*.js | grep -v min)
-PLUGIN_FILES_MIN = $(PLUGIN_FILES:.js=.min.js)
+all: $(STROPHE_MIN)
 
-DIST_FILES = LICENSE.txt README.txt contrib examples plugins tests doc \
-		$(STROPHE) $(STROPHE_MIN)
+stamp-npm: package.json
+	npm install
+	touch stamp-npm
 
-VERSION = $(shell if [ -f version.txt ]; then cat version.txt; else VERSION=`git rev-list HEAD -n1`; echo $${VERSION:0:7}; fi)
+stamp-bower: stamp-npm bower.json
+	$(BOWER) install
+	touch stamp-bower
 
-all: normal min
-
-normal: $(STROPHE)
-
-min: $(STROPHE_MIN) $(PLUGIN_FILES_MIN)
-
-$(STROPHE): $(BASE_FILES)
+$(STROPHE)::
+	make stamp-bower
 	@@echo "Building" $(STROPHE) "..."
-	@@cat $(BASE_FILES) | sed -e 's/@VERSION@/$(VERSION)/' > $(STROPHE)
-	@@echo $(STROPHE) "built."
+	$(GRUNT) concat
 	@@echo
 
-$(STROPHE_MIN): $(STROPHE)
+$(STROPHE_MIN)::
+	make $(STROPHE)
 	@@echo "Building" $(STROPHE_MIN) "..."
-ifdef YUI_COMPRESSOR
-	@@java -jar $(YUI_COMPRESSOR) --type js --nomunge \
-		$(STROPHE) > $(STROPHE_MIN)
-	@@echo $(STROPHE_MIN) "built."
-else
-	@@echo $(STROPHE_MIN) "not built."
-	@@echo "    YUI Compressor required to build minified version."
-	@@echo "    Please set YUI_COMPRESSOR to the path to the jar file."
-endif
-	@@echo
+	$(GRUNT) min
 
-%.min.js: %.js
-	@@echo "Building" $@ "..."
-ifdef YUI_COMPRESSOR
-	@@java -jar $(YUI_COMPRESSOR) --type js --nomunge \
-		$< > $@
-	@@echo $@ "built."
-else
-	@@echo $@ "not built."
-	@@echo "    YUI Compressor required to build minified version."
-	@@echo "    Please set YUI_COMPRESSOR to the path to the jar file."
-endif
-	@@echo
-
+.PHONY: doc
 doc:
 	@@echo "Building Strophe documentation..."
 	@@if [ ! -d $(NDPROJ_DIR) ]; then mkdir $(NDPROJ_DIR); fi
 	@@if [ ! -d $(DOC_DIR) ]; then mkdir $(DOC_DIR); fi
-	@@NaturalDocs -q -i $(SRC_DIR) -i $(PLUGINS_DIR) -o html $(DOC_DIR) -p $(NDPROJ_DIR)
+	@@if [ ! -d $(DOC_TEMP) ]; then mkdir $(DOC_TEMP); fi
+	@@cp $(STROPHE) $(DOC_TEMP)
+	@@naturaldocs -r -ro -q -i $(DOC_TEMP) -o html $(DOC_DIR) -p $(NDPROJ_DIR)
 	@@echo "Documentation built."
 	@@echo
 
-release: normal min doc
-	@@echo "Creating release packages..."
-	@@mkdir strophejs-$(VERSION)
-	@@cp -R $(DIST_FILES) strophejs-$(VERSION)
-	@@tar czf strophejs-$(VERSION).tar.gz strophejs-$(VERSION)
-	@@zip -qr strophejs-$(VERSION).zip strophejs-$(VERSION)
-	@@rm -rf strophejs-$(VERSION)
+.PHONY: release
+release:
+	@@$(GRUNT) release
 	@@echo "Release created."
 	@@echo
 
-clean:
-	@@echo "Cleaning" $(STROPHE) "..."
-	@@rm -f $(STROPHE)
-	@@echo $(STROPHE) "cleaned."
-	@@echo "Cleaning" $(STROPHE_MIN) "..."
-	@@rm -f $(STROPHE_MIN)
-	@@echo $(STROPHE_MIN) "cleaned."
-	@@echo "Cleaning minified plugins..."
-	@@rm -f $(PLUGIN_FILES_MIN)
-	@@echo "Minified plugins cleaned."
-	@@echo "Cleaning documentation..."
-	@@rm -rf $(NDPROJ_DIR) $(DOC_DIR)
-	@@echo "Documentation cleaned."
-	@@echo
+.PHONY: check
+check::
+	make stamp-bower
+	$(PHANTOMJS) node_modules/qunit-phantomjs-runner/runner-list.js tests/strophe.html
 
-.PHONY: all normal min doc release clean
+.PHONY: serve
+serve:
+	$(HTTPSERVE) -p 8080
+
+.PHONY: clean
+clean:
+	@@rm -f stamp-npm stamp-bower
+	@@rm -rf node_modules bower_components
+	@@rm -f $(STROPHE)
+	@@rm -f $(STROPHE_MIN)
+	@@rm -f $(PLUGIN_FILES_MIN)
+	@@rm -rf $(NDPROJ_DIR) $(DOC_DIR) $(DOC_TEMP)
+	@@echo "Done."
+	@@echo
