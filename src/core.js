@@ -2572,7 +2572,8 @@ Strophe.Connection.prototype = {
         var mechanisms = bodyWrap.getElementsByTagName("mechanism");
         var matched = [];
         var i, mech, found_authentication = false;
-        if (!hasFeatures) {
+        // IIC: support legacy jabber server without features support
+        if (!hasFeatures && !this.options.legacy_server) {
             this._proto._no_auth_received(_callback);
             return;
         }
@@ -2582,7 +2583,7 @@ Strophe.Connection.prototype = {
                 if (this.mechanisms[mech]) matched.push(this.mechanisms[mech]);
             }
         }
-        this._authentication.legacy_auth =
+        this._authentication.legacy_auth = this.options.legacy_server ? true : 
             bodyWrap.getElementsByTagName("auth").length > 0;
         found_authentication = this._authentication.legacy_auth ||
             matched.length > 0;

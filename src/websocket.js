@@ -255,6 +255,11 @@ Strophe.Websocket.prototype = {
             if (this._handleStreamStart(streamStart)) {
                 //_connect_cb will check for stream:error and disconnect on error
                 this._connect_cb(streamStart);
+                // IIC: no stream:features from legacy server, need to start auth
+                if (this._conn.options.legacy_server) {
+                    this.socket.onmessage = this._onMessage.bind(this);
+                    this._conn.authenticate([]);
+                }
             }
         } else if (message.data.indexOf("<close ") === 0) { //'<close xmlns="urn:ietf:params:xml:ns:xmpp-framing />') {
             this._conn.rawInput(message.data);
