@@ -1061,9 +1061,10 @@ Strophe = {
 
         // IE9 does implement createDocument(); however, using it will cause the browser to leak memory on page unload.
         // Here, we test for presence of createDocument() plus IE's proprietary documentMode attribute, which would be
-                // less than 10 in the case of IE9 and below.
+        // less than 10 in the case of IE9 and below.
+        // IIC: keep using hack for IE10 as it throws an error otherwise
         if (document.implementation.createDocument === undefined ||
-                        document.implementation.createDocument && document.documentMode && document.documentMode < 10) {
+                        document.implementation.createDocument && document.documentMode && document.documentMode < 11) {
             doc = this._getIEXmlDom();
             doc.appendChild(doc.createElement('strophe'));
         } else {
@@ -2495,6 +2496,7 @@ Strophe.Connection.prototype = {
 
         // parse jid for domain
         this.domain = Strophe.getDomainFromJid(this.jid);
+        this.route = route; // IIC: save for use by websocket connector
 
         this._changeConnectStatus(Strophe.Status.CONNECTING, null);
 
@@ -3272,7 +3274,8 @@ Strophe.Connection.prototype = {
         var mechanisms = bodyWrap.getElementsByTagName("mechanism");
         var matched = [];
         var i, mech, found_authentication = false;
-        if (!hasFeatures) {
+        // IIC: support legacy jabber server without features support
+        if (!hasFeatures && !this.options.legacy_server) {
             this._proto._no_auth_received(_callback);
             return;
         }
@@ -3282,7 +3285,7 @@ Strophe.Connection.prototype = {
                 if (this.mechanisms[mech]) matched.push(this.mechanisms[mech]);
             }
         }
-        this._authentication.legacy_auth =
+        this._authentication.legacy_auth = this.options.legacy_server ? true : 
             bodyWrap.getElementsByTagName("auth").length > 0;
         found_authentication = this._authentication.legacy_auth ||
             matched.length > 0;
@@ -4488,7 +4491,7 @@ Strophe.Bosh.prototype = {
                    session.rid &&
                    session.sid &&
                    session.jid &&
-                   (typeof jid === "undefined" || jid === "null" || Strophe.getBareJidFromJid(session.jid) == Strophe.getBareJidFromJid(jid)))
+                   (typeof jid === "undefined" || jid === null || Strophe.getBareJidFromJid(session.jid) == Strophe.getBareJidFromJid(jid)))
         {
             this._conn.restored = true;
             this._attach(session.jid, session.sid, session.rid, callback, wait, hold, wind);
@@ -5184,11 +5187,16 @@ Strophe.Websocket.prototype = {
      */
     _buildStream: function ()
     {
-        return $build("open", {
+        var attribs = {
             "xmlns": Strophe.NS.FRAMING,
             "to": this._conn.domain,
             "version": '1.0'
-        });
+        };
+        // IIC: allow route to be specified (as it can be with BOSH connection)
+        if (this._conn.route) {
+            attribs.route = this._conn.route;
+        }
+        return $build("open", attribs);
     },
 
     /** PrivateFunction: _check_streamerror
@@ -5321,6 +5329,8 @@ Strophe.Websocket.prototype = {
             this._conn._changeConnectStatus(Strophe.Status.CONNFAIL, error);
             this._conn._doDisconnect();
             return false;
+        } else {
+            this._conn.connected = true
         }
 
         return true;
@@ -5346,6 +5356,11 @@ Strophe.Websocket.prototype = {
             if (this._handleStreamStart(streamStart)) {
                 //_connect_cb will check for stream:error and disconnect on error
                 this._connect_cb(streamStart);
+                // IIC: no stream:features from legacy server, need to start auth
+                if (this._conn.options.legacy_server) {
+                    this.socket.onmessage = this._onMessage.bind(this);
+                    this._conn.authenticate([]);
+                }
             }
         } else if (message.data.indexOf("<close ") === 0) { //'<close xmlns="urn:ietf:params:xml:ns:xmpp-framing />') {
             this._conn.rawInput(message.data);
@@ -5392,7 +5407,9 @@ Strophe.Websocket.prototype = {
                 Strophe.info("Couldn't send <close /> tag.");
             }
         }
-        this._conn._doDisconnect();
+        // IIC: defer disconnect in case we're already handling a disconnect event
+        var self = this;
+        setTimeout(function() { self._conn._doDisconnect(); }, 0);
     },
 
     /** PrivateFunction: _doDisconnect
