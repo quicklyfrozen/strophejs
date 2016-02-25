@@ -230,6 +230,8 @@ Strophe.Websocket.prototype = {
             this._conn._changeConnectStatus(Strophe.Status.CONNFAIL, error);
             this._conn._doDisconnect();
             return false;
+        } else {
+            this._conn.connected = true
         }
 
         return true;
