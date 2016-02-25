@@ -88,11 +88,16 @@ Strophe.Websocket.prototype = {
      */
     _buildStream: function ()
     {
-        return $build("open", {
+        var attribs = {
             "xmlns": Strophe.NS.FRAMING,
             "to": this._conn.domain,
             "version": '1.0'
-        });
+        };
+        // IIC: allow route to be specified (as it can be with BOSH connection)
+        if (this._conn.route) {
+            attribs.route = this._conn.route;
+        }
+        return $build("open", attribs);
     },
 
     /** PrivateFunction: _check_streamerror
@@ -296,7 +301,9 @@ Strophe.Websocket.prototype = {
                 Strophe.info("Couldn't send <close /> tag.");
             }
         }
-        this._conn._doDisconnect();
+        // IIC: defer disconnect in case we're already handling a disconnect event
+        var self = this;
+        setTimeout(function() { self._conn._doDisconnect(); }, 0);
     },
 
     /** PrivateFunction: _doDisconnect

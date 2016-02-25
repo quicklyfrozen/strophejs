@@ -359,9 +359,10 @@ Strophe = {
 
         // IE9 does implement createDocument(); however, using it will cause the browser to leak memory on page unload.
         // Here, we test for presence of createDocument() plus IE's proprietary documentMode attribute, which would be
-                // less than 10 in the case of IE9 and below.
+        // less than 10 in the case of IE9 and below.
+        // IIC: keep using hack for IE10 as it throws an error otherwise
         if (document.implementation.createDocument === undefined ||
-                        document.implementation.createDocument && document.documentMode && document.documentMode < 10) {
+                        document.implementation.createDocument && document.documentMode && document.documentMode < 11) {
             doc = this._getIEXmlDom();
             doc.appendChild(doc.createElement('strophe'));
         } else {
@@ -1793,6 +1794,7 @@ Strophe.Connection.prototype = {
 
         // parse jid for domain
         this.domain = Strophe.getDomainFromJid(this.jid);
+        this.route = route; // IIC: save for use by websocket connector
 
         this._changeConnectStatus(Strophe.Status.CONNECTING, null);
 
